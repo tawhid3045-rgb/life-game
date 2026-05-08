@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>your life as a multiplayer game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,200;0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=DM+Serif+Display:ital@0;1&family=Lora:ital,wght@1,400;1,500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <canvas id="world"></canvas>
+  <div id="vignette"></div>
+  <div id="particles"></div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div id="hud-name"></div>
+    <div id="hud-coords"></div>
+  </div>
+
+  <!-- Presence -->
+  <div id="presence">
+    <span id="presence-dot"></span>
+    <span id="presence-count">1</span>&nbsp;<span id="presence-label">soul</span>
+  </div>
+
+  <!-- Mood strip -->
+  <div id="mood-strip">
+    <div id="mood-label">collective mood</div>
+    <div id="mood-value">neutral</div>
+  </div>
+
+  <!-- Mood picker -->
+  <div id="mood-picker">
+    <span class="mood-opt" data-mood="ecstatic">ecstatic</span>
+    <span class="mood-opt" data-mood="happy">happy</span>
+    <span class="mood-opt active" data-mood="neutral">neutral</span>
+    <span class="mood-opt" data-mood="melancholy">melancholy</span>
+    <span class="mood-opt" data-mood="lost">lost</span>
+  </div>
+
+  <!-- Memory input -->
+  <div id="memory-overlay" class="hidden">
+    <div id="memory-box">
+      <div id="memory-prompt">leave something behind.</div>
+      <textarea id="memory-input" maxlength="100" placeholder="a thought, a feeling, a fragment…" spellcheck="false"></textarea>
+      <div id="memory-meta">
+        <span id="memory-chars">100</span>
+        <button id="memory-submit">release</button>
+      </div>
+      <div id="memory-close">esc · enter to release</div>
+    </div>
+  </div>
+
+  <!-- Orb popup -->
+  <div id="orb-popup" class="hidden">
+    <div id="orb-text"></div>
+    <div id="orb-ago"></div>
+  </div>
+
+  <!-- Hints -->
+  <div id="hints">
+    <div class="hint"><kbd>W A S D</kbd> move</div>
+    <div class="hint"><kbd>E</kbd> leave a memory</div>
+    <div class="hint">near <span class="orb-hint">orbs</span> → read · <kbd>X</kbd> delete yours</div>
+  </div>
+
+  <!-- Mute -->
+  <div id="mute-btn" title="toggle sound">♪</div>
+
+  <!-- Customize screen -->
+  <div id="customize-screen" class="hidden">
+    <div id="customize-box">
+      <div id="customize-title">who are you<em>?</em></div>
+      <div id="customize-sub">or let the universe decide.</div>
+      <div class="customize-field">
+        <label>your name</label>
+        <input type="text" id="custom-name" maxlength="20" placeholder="leave blank for a random name" spellcheck="false" autocomplete="off">
+      </div>
+      <div class="customize-field">
+        <label>your color</label>
+        <div id="color-options">
+          <div class="color-opt" data-color="#f9b8d0" style="background:#f9b8d0"></div>
+          <div class="color-opt" data-color="#cbb8fd" style="background:#cbb8fd"></div>
+          <div class="color-opt selected" data-color="#a5c8f8" style="background:#a5c8f8"></div>
+          <div class="color-opt" data-color="#9de8c0" style="background:#9de8c0"></div>
+          <div class="color-opt" data-color="#fbc99a" style="background:#fbc99a"></div>
+          <div class="color-opt" data-color="#e2c4f8" style="background:#e2c4f8"></div>
+          <div class="color-opt" data-color="#a5f3c8" style="background:#a5f3c8"></div>
+          <div class="color-opt" data-color="#fda4af" style="background:#fda4af"></div>
+        </div>
+      </div>
+      <div id="avatar-preview">
+        <canvas id="preview-canvas" width="60" height="60"></canvas>
+      </div>
+      <button id="customize-enter">enter the world</button>
+    </div>
+  </div>
+
+  <!-- Splash -->
+  <div id="splash">
+    <div id="splash-inner">
+      <div id="splash-title">your life<br><em>as a multiplayer game</em></div>
+      <div id="splash-sub">you are not alone in here.</div>
+      <div id="splash-enter">touch anywhere to begin</div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/game.js"></script>
+</body>
+</html>
