@@ -5,142 +5,121 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: '*' }
-});
+const io = new Server(server, { cors: { origin: '*' } });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ─── In-Memory World State ──────────────────────────────────────────────────
-// Future: replace with MongoDB collections
-const players = new Map();       // socketId → { x, y, mood, color, name }
-const memoryOrbs = [];           // { id, x, y, text, createdAt, authorId }
+// ─── In-Memory State ─────────────────────────────────────────────────────────
+const players = new Map();  // socketId → { lat, lng, mood, color, name, district }
+const memoryOrbs = [];      // { id, lat, lng, text, createdAt, authorId, district }
 let orbIdCounter = 0;
 
-const MOODS = { ecstatic: 5, happy: 4, neutral: 3, melancholy: 2, lost: 1 };
+const MOODS = { ecstatic:5, happy:4, neutral:3, melancholy:2, lost:1 };
 const MOOD_LABELS = Object.keys(MOODS);
 
-function calcGlobalMood() {
-  if (players.size === 0) return 3;
-  let total = 0;
-  players.forEach(p => { total += MOODS[p.mood] || 3; });
-  return total / players.size;
-}
-
-function globalMoodColor(mood) {
-  // Maps 1–5 to a hue: 240(blue/sad) → 60(yellow/happy)
-  const t = (mood - 1) / 4; // 0–1
-  const hue = Math.round(240 + t * (60 - 240)); // 240 → 60
-  return { hue, sat: 70, mood };
-}
-
 const AVATAR_COLORS = [
-  '#ff6b9d', '#c084fc', '#60a5fa', '#34d399', '#fbbf24',
-  '#f87171', '#a78bfa', '#38bdf8', '#4ade80', '#fb923c'
+  '#f9b8d0','#cbb8fd','#a5c8f8','#9de8c0',
+  '#fbc99a','#e2c4f8','#a5f3c8','#fda4af'
 ];
 
-function randomColor() {
-  return AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
-}
-
+function randomColor() { return AVATAR_COLORS[Math.floor(Math.random()*AVATAR_COLORS.length)]; }
 function randomName() {
-  const adj = ['drifting', 'quiet', 'lost', 'wandering', 'soft', 'hollow', 'fading', 'still'];
-  const noun = ['soul', 'echo', 'ghost', 'signal', 'pulse', 'void', 'fragment', 'wave'];
-  return `${adj[Math.floor(Math.random() * adj.length)]}_${noun[Math.floor(Math.random() * noun.length)]}`;
+  const adj = ['drifting','quiet','lost','wandering','soft','hollow','fading','still','gentle','hazy'];
+  const noun = ['soul','echo','ghost','signal','pulse','fragment','wave','mist','breath','light'];
+  return `${adj[Math.floor(Math.random()*adj.length)]}_${noun[Math.floor(Math.random()*noun.length)]}`;
+}
+function calcGlobalMood() {
+  if (!players.size) return 3;
+  let t = 0; players.forEach(p => { t += MOODS[p.mood]||3; });
+  return t / players.size;
+}
+function moodToHue(m) {
+  const t = (m-1)/4;
+  return Math.round(240 + t*(60-240));
 }
 
-// ─── Socket.IO Events ───────────────────────────────────────────────────────
+// ─── Socket Events ────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
-  const startX = Math.floor(Math.random() * 3000) - 1500;
-  const startY = Math.floor(Math.random() * 3000) - 1500;
 
-  // Wait for player to send their chosen name/color
-  socket.on('player:join', ({ name, color }) => {
-    const safeName = (typeof name === 'string' && name.trim())
-      ? name.trim().slice(0, 20)
-      : randomName();
+  socket.on('player:join', ({ name, color, lat, lng, district }) => {
+    const safeName  = (typeof name==='string' && name.trim()) ? name.trim().slice(0,20) : randomName();
     const safeColor = AVATAR_COLORS.includes(color) ? color : randomColor();
+    // Default to center of Bangladesh if no location
+    const safeLat = (typeof lat==='number' && lat>20 && lat<27) ? lat : 23.6850 + (Math.random()-0.5)*0.5;
+    const safeLng = (typeof lng==='number' && lng>88 && lng<93) ? lng : 90.3563 + (Math.random()-0.5)*0.5;
 
-    const player = { x: startX, y: startY, mood: 'neutral', color: safeColor, name: safeName, id: socket.id };
+    const player = {
+      lat: safeLat, lng: safeLng,
+      mood: 'neutral', color: safeColor,
+      name: safeName, district: district||'unknown',
+      id: socket.id
+    };
     players.set(socket.id, player);
 
-    // Send this player their own data + full world state
     socket.emit('init', {
       self: player,
-      players: [...players.entries()].map(([id, p]) => ({ ...p, id })),
-      orbs: memoryOrbs,
-      globalMood: globalMoodColor(calcGlobalMood())
+      players: [...players.values()].map(p=>({...p})),
+      orbs: memoryOrbs.map(o=>({ id:o.id,lat:o.lat,lng:o.lng,createdAt:o.createdAt,district:o.district })),
+      globalMood: { hue: moodToHue(calcGlobalMood()), mood: calcGlobalMood() }
     });
-
-    // Broadcast new player to others
-    socket.broadcast.emit('player:join', { ...player, id: socket.id });
+    socket.broadcast.emit('player:join', { ...player });
   });
 
-  // Position update — throttled on client side
-  socket.on('player:move', ({ x, y }) => {
+  socket.on('player:move', ({ lat, lng }) => {
     const p = players.get(socket.id);
     if (!p) return;
-    p.x = x; p.y = y;
-    socket.broadcast.emit('player:moved', { id: socket.id, x, y });
+    if (typeof lat!=='number'||typeof lng!=='number') return;
+    p.lat = lat; p.lng = lng;
+    socket.broadcast.emit('player:moved', { id:socket.id, lat, lng });
   });
 
-  // Mood update
   socket.on('player:mood', (mood) => {
     if (!MOOD_LABELS.includes(mood)) return;
     const p = players.get(socket.id);
     if (!p) return;
     p.mood = mood;
-    const gm = globalMoodColor(calcGlobalMood());
-    io.emit('world:mood', gm);
+    io.emit('world:mood', { hue: moodToHue(calcGlobalMood()), mood: calcGlobalMood() });
   });
 
-  // Memory orb creation
-  socket.on('orb:create', ({ text }) => {
+  socket.on('orb:create', ({ text, lat, lng, district }) => {
     const p = players.get(socket.id);
-    if (!p || !text || typeof text !== 'string') return;
-    const clean = text.slice(0, 100).trim();
+    if (!p||!text||typeof text!=='string') return;
+    const clean = text.slice(0,100).trim();
     if (!clean) return;
     const orb = {
       id: ++orbIdCounter,
-      x: p.x,
-      y: p.y,
-      text: clean,
-      createdAt: Date.now(),
-      authorId: socket.id // never sent to other clients
+      lat: lat||p.lat, lng: lng||p.lng,
+      text: clean, createdAt: Date.now(),
+      authorId: socket.id,
+      district: district||p.district||'unknown'
     };
     memoryOrbs.push(orb);
-    // Send to all (strip authorId). Flag as mine only for the author.
-    const public_orb = { id: orb.id, x: orb.x, y: orb.y, createdAt: orb.createdAt };
-    socket.emit('orb:placed', { ...public_orb, mine: true });       // author gets mine:true
-    socket.broadcast.emit('orb:placed', public_orb);                // others get normal
+    const pub = { id:orb.id, lat:orb.lat, lng:orb.lng, createdAt:orb.createdAt, district:orb.district };
+    socket.emit('orb:placed', { ...pub, mine:true });
+    socket.broadcast.emit('orb:placed', pub);
   });
 
-  // Orb read request
   socket.on('orb:read', ({ id }) => {
-    const orb = memoryOrbs.find(o => o.id === id);
+    const orb = memoryOrbs.find(o=>o.id===id);
     if (!orb) return;
-    socket.emit('orb:content', { id: orb.id, text: orb.text });
+    socket.emit('orb:content', { id:orb.id, text:orb.text, district:orb.district });
   });
 
-  // Orb delete — only author can delete
   socket.on('orb:delete', ({ id }) => {
-    const idx = memoryOrbs.findIndex(o => o.id === id && o.authorId === socket.id);
-    if (idx === -1) return; // not found or not the author
-    memoryOrbs.splice(idx, 1);
-    io.emit('orb:deleted', { id }); // tell all clients to remove it
+    const idx = memoryOrbs.findIndex(o=>o.id===id && o.authorId===socket.id);
+    if (idx===-1) return;
+    memoryOrbs.splice(idx,1);
+    io.emit('orb:deleted', { id });
   });
 
-  // Disconnect
   socket.on('disconnect', () => {
     players.delete(socket.id);
-    io.emit('player:leave', { id: socket.id });
-    const gm = globalMoodColor(calcGlobalMood());
-    io.emit('world:mood', gm);
+    io.emit('player:leave', { id:socket.id });
+    io.emit('world:mood', { hue: moodToHue(calcGlobalMood()), mood: calcGlobalMood() });
   });
 });
 
 const PORT = process.env.PORT || 8080;
-console.log(`Starting server on PORT: ${PORT}`);
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🌌 Life Game server running on http://localhost:${PORT}`);
+  console.log(`🌍 Life Game (Bangladesh Map) running on http://localhost:${PORT}`);
 });
